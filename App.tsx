@@ -38,11 +38,6 @@ const App: React.FC = () => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [animDirection, setAnimDirection] = useState<'horizontal' | 'vertical'>('horizontal');
   const requestRef = useRef<number>(null);
-  const aiRef = useRef<GoogleGenAI | null>(null);
-
-  useEffect(() => {
-    aiRef.current = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  }, []);
 
   const animate = () => {
     setViewport(prev => ({
@@ -82,14 +77,26 @@ const App: React.FC = () => {
   };
 
   const getMathInsight = async () => {
-    if (!aiRef.current || !currentInput) return;
+    if (!currentInput) return;
+    
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      const msg = language === 'pt' 
+        ? "Erro: Chave de API não encontrada (process.env.API_KEY). O recurso de IA requer configuração de ambiente."
+        : "Error: API Key not found (process.env.API_KEY). AI features require environment configuration.";
+      console.error(msg);
+      alert(msg);
+      return;
+    }
+
     setLoadingInsight(true);
     try {
+      const ai = new GoogleGenAI({ apiKey });
       const prompt = language === 'pt' 
         ? `Analise a função matemática: ${currentInput}. Explique de forma didática.`
         : `Analyze the mathematical function: ${currentInput}. Explain in a didactic way.`;
 
-      const response = await aiRef.current.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
