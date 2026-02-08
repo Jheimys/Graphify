@@ -79,22 +79,31 @@ const App: React.FC = () => {
   const getMathInsight = async () => {
     if (!currentInput) return;
     
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
+    // Verificação ultra-segura da API Key para evitar crash no browser
+    let apiKey: string | undefined;
+    try {
+      // Tenta ler de process.env se disponível (injetado por bundlers)
+      apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : undefined;
+    } catch (e) {
+      apiKey = undefined;
+    }
+
+    if (!apiKey || apiKey === "SUA_CHAVE_DO_GOOGLE_GEMINI_AQUI") {
       const msg = language === 'pt' 
-        ? "Erro: Chave de API não encontrada (process.env.API_KEY). O recurso de IA requer configuração de ambiente."
-        : "Error: API Key not found (process.env.API_KEY). AI features require environment configuration.";
-      console.error(msg);
+        ? "Configuração Necessária: Verifique se sua API_KEY está configurada corretamente no ambiente ou no arquivo .env."
+        : "Setup Required: Check if your API_KEY is correctly configured in the environment or .env file.";
       alert(msg);
+      console.error("API_KEY missing or placeholder detected.");
       return;
     }
 
     setLoadingInsight(true);
     try {
+      // A instância é criada EXCLUSIVAMENTE aqui dentro para garantir que temos a chave
       const ai = new GoogleGenAI({ apiKey });
       const prompt = language === 'pt' 
-        ? `Analise a função matemática: ${currentInput}. Explique de forma didática.`
-        : `Analyze the mathematical function: ${currentInput}. Explain in a didactic way.`;
+        ? `Analise a função matemática: ${currentInput}. Explique de forma didática com título, definição, propriedades e aplicação real.`
+        : `Analyze the mathematical function: ${currentInput}. Explain didactically with title, definition, properties and real-world application.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -114,10 +123,17 @@ const App: React.FC = () => {
         }
       });
       
-      const data = JSON.parse(response.text);
-      setInsight(data);
-    } catch (err) {
-      console.error(err);
+      if (response && response.text) {
+        const data = JSON.parse(response.text);
+        setInsight(data);
+      }
+    } catch (err: any) {
+      console.error("Erro na chamada da IA:", err);
+      if (err.message && err.message.includes("API Key")) {
+        alert(language === 'pt' ? "Erro de Chave de API: A chave fornecida é inválida." : "API Key Error: The provided key is invalid.");
+      } else {
+        alert(language === 'pt' ? "Falha ao conectar com a IA." : "AI Connection failed.");
+      }
     } finally {
       setLoadingInsight(false);
     }
@@ -135,14 +151,14 @@ const App: React.FC = () => {
     { type: 'Logarítmica', syntax: 'log(x, base)', example: 'y = log(x, 0.5)', desc: 'Para base decimal use 0.5, 0.2, etc.' },
     { type: 'Trigonométrica', syntax: 'sin(x), cos(x), tan(x)', example: 'y = sin(x)' },
     { type: 'Hiperbólica', syntax: 'sinh(x), cosh(x)', example: 'y = tanh(x)' },
-    { type: 'Por Partes', syntax: 'cond ? expr1 : expr2', example: 'y = x >= 0 ? x^2 : -x', desc: 'Usa lógica ternária (condição ? se_verdade : se_falso)' },
+    { type: 'Por Partes', syntax: 'cond ? expr1 : expr2', example: 'y = x >= 0 ? x^2 : -x' },
     { type: 'Degrau', syntax: 'unitStep(x)', example: 'y = unitStep(x)' },
     { type: 'Sinal', syntax: 'sign(x)', example: 'y = sign(x)' },
     { type: 'Piso', syntax: 'floor(x)', example: 'y = floor(x)' },
     { type: 'Teto', syntax: 'ceil(x)', example: 'y = ceil(x)' },
     { type: 'Gaussiana', syntax: 'e^(-x^2)', example: 'y = e^(-x^2)' },
     { type: 'Sigmoide', syntax: '1 / (1 + e^-x)', example: 'y = 1 / (1 + e^-x)' },
-    { type: 'Especiais', syntax: 'Paramétrica / Polar', example: 'y = 2 * sin(x) + cos(x)', desc: 'Atualmente o motor renderiza funções na forma y = f(x).' }
+    { type: 'Especiais', syntax: 'Paramétrica / Polar', example: 'y = 2 * sin(x) + cos(x)', desc: 'Renderiza funções na forma y = f(x).' }
   ];
 
   return (
@@ -207,9 +223,13 @@ const App: React.FC = () => {
               <button onClick={() => setViewport(v => ({...v, is3D: true}))} className={`px-4 py-1 rounded-full text-[10px] font-bold transition-all ${viewport.is3D ? 'bg-primary shadow-lg text-white' : 'text-white/30'}`}>3D</button>
             </div>
 
-            <button onClick={getMathInsight} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/20 text-primary text-xs font-bold hover:bg-primary/30 transition-all border border-primary/20">
-              <span className="material-symbols-outlined text-sm">auto_awesome</span>
-              {loadingInsight ? (language === 'pt' ? 'Pensando...' : 'Thinking...') : (language === 'pt' ? 'IA Insight' : 'AI Insight')}
+            <button onClick={getMathInsight} disabled={loadingInsight} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all border ${loadingInsight ? 'bg-white/5 text-white/20 border-white/5 cursor-wait' : 'bg-primary/20 text-primary border-primary/20 hover:bg-primary/30'}`}>
+              <span className={`material-symbols-outlined text-sm ${loadingInsight ? 'animate-spin' : ''}`}>
+                {loadingInsight ? 'sync' : 'auto_awesome'}
+              </span>
+              <span className="text-xs font-bold uppercase tracking-wider">
+                {loadingInsight ? (language === 'pt' ? 'Processando' : 'Thinking') : (language === 'pt' ? 'IA Insight' : 'AI Insight')}
+              </span>
             </button>
           </div>
 
@@ -231,13 +251,13 @@ const App: React.FC = () => {
           
           {/* Didactic AI Insight Card */}
           {insight && (
-            <div className="bg-surface/90 border border-primary/30 rounded-2xl p-5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-4 max-w-2xl relative z-40">
+            <div className="bg-surface/95 border border-primary/30 rounded-2xl p-5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-4 max-w-2xl relative z-40">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary">school</span>
                   <h3 className="font-bold text-lg text-primary">{insight.title}</h3>
                 </div>
-                <button onClick={() => setInsight(null)} className="text-white/20 hover:text-white">
+                <button onClick={() => setInsight(null)} className="text-white/20 hover:text-white p-1">
                   <span className="material-symbols-outlined text-sm">close</span>
                 </button>
               </div>
